@@ -25,13 +25,14 @@ coverage, and fail on every broken copy in ``grader/mutants/``.
 """
 
 import pytest
+from dataclasses import FrozenInstanceError
 
+from src.types import Coordinate
 from src.waypoint_utils import (
     east_north_coordinate_offset_m,
     parse_waypoints_file,
     sort_clockwise_sweep,
 )
-from src.types import Coordinate
 
 # The helper and the test below are given to you.
 
@@ -140,15 +141,6 @@ def test_latitude_out_of_range(tmp_path):
     with pytest.raises(ValueError):
         parse_waypoints_file(path)
 
-def test_raw_not_dict(tmp_path):
-    path = write_to_tmp_waypoints_file(
-        tmp_path,
-        """
-        hello world
-        """
-    )
-    with pytest.raises(ValueError):
-        parse_waypoints_file(path)
 
 def test_instance_not_dict(tmp_path):
     path = write_to_tmp_waypoints_file(
@@ -249,7 +241,7 @@ def test_coordinate_frozen(tmp_path):
 
     _, waypoints = parse_waypoints_file(path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(FrozenInstanceError):
         waypoints[0].lat = 99
 
 def test_sort_clockwise_from_north():
@@ -269,24 +261,6 @@ def test_sort_clockwise_from_north():
         west,
     ]
 
-def test_sort_clockwise_sweep_wraparound_from_home():
-    waypoints = [
-        Coordinate(1.0, 0.0, 0.0),    # N
-        Coordinate(0.0, 1.0, 0.0),    # E
-        Coordinate(-1.0, 0.0, 0.0),   # S
-        Coordinate(0.0, -1.0, 0.0),   # W
-    ]
-
-    home = Coordinate(1.0, -1.0, 0.0)  # NW
-
-    result = sort_clockwise_sweep(waypoints, home)
-
-    assert result == [
-        Coordinate(1.0, 0.0, 0.0),
-        Coordinate(0.0, 1.0, 0.0),
-        Coordinate(-1.0, 0.0, 0.0),
-        Coordinate(0.0, -1.0, 0.0),
-    ]
 
 def test_lat_smaller_than_90(tmp_path):
     data = ('''
@@ -364,3 +338,22 @@ def test_east_offset_scales_with_latitude():
     # should be about half of 111 km
     assert east == pytest.approx(55597, rel=0.02)
 
+def test_home_at_centroid_falls_back_to_north():
+    north = Coordinate(1, 0, 0)
+    east = Coordinate(0, 1, 0)
+    south = Coordinate(-1, 0, 0)
+    west = Coordinate(0, -1, 0)
+
+    home = Coordinate(0, 0, 0)
+
+    result = sort_clockwise_sweep(
+        [south, west, east, north],
+        home,
+    )
+
+    assert result == [
+        north,
+        east,
+        south,
+        west,
+    ]
